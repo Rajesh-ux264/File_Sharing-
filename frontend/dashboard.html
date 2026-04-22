@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FileShare — Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">☁️ FileShare</div>
+      <nav>
+        <button class="nav-item active">📁 My Files</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-pill">
+          <div class="avatar" id="user-avatar">?</div>
+          <div>
+            <div class="name" id="user-name">Loading…</div>
+          </div>
+        </div>
+        <button class="nav-item" onclick="logout()" style="margin-top:8px;">🚪 Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+      <div class="page-header">
+        <h2>My Files</h2>
+        <label class="btn btn-primary" style="cursor:pointer; width:auto;">
+          ⬆️ Upload Files
+          <input type="file" id="file-input" multiple hidden />
+        </label>
+      </div>
+
+      <!-- Drop Zone -->
+      <div class="upload-zone" id="drop-zone">
+        <div class="upload-icon">📂</div>
+        <h3>Drag & drop files here</h3>
+        <p>or click the Upload button above — max 100 MB per file</p>
+        <div class="upload-progress" id="upload-progress">
+          <p id="upload-status" style="font-size:13px;margin-bottom:8px;color:var(--muted);">Uploading…</p>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar" id="progress-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- File List -->
+      <div class="files-section">
+        <h3>Uploaded Files</h3>
+        <div class="files-table-wrap" id="files-container">
+          <div class="empty-state">
+            <div class="empty-icon">🗂️</div>
+            <p>No files yet. Upload your first file!</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Share Modal -->
+  <div class="modal-overlay" id="share-modal">
+    <div class="modal">
+      <h3>🔗 Share File</h3>
+      <div class="form-group">
+        <label>Link Expiry (optional)</label>
+        <select id="expiry-select" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;font-size:14px;outline:none;">
+          <option value="">Never expires</option>
+          <option value="1">1 hour</option>
+          <option value="24">24 hours</option>
+          <option value="72">3 days</option>
+          <option value="168">7 days</option>
+        </select>
+      </div>
+      <div id="share-link-row" style="display:none;">
+        <label style="font-size:13px;font-weight:500;display:block;margin-bottom:6px;">Share Link</label>
+        <div class="copy-row">
+          <input class="copy-input" id="share-link-input" readonly />
+          <button class="btn btn-outline btn-sm" onclick="copyLink()">📋 Copy</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="generate-btn" style="width:auto;" onclick="generateLink()">Generate Link</button>
+        <button class="btn btn-danger btn-sm" id="revoke-btn" style="display:none;" onclick="revokeLink()">Revoke</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API = '';
+    const token = localStorage.getItem('token');
+    if (!token) location.href = '/index.html';
+
+    let files = [];
+    let activeFileId = null;
+
+    function authHeaders() {
+      return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    }
+
+    function logout() {
+      localStorage.clear();
+      location.href = '/index.html';
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function fileIcon(mime) {
+      if (!mime) return '📄';
+      if (mime.startsWith('image/')) return '🖼️';
+      if (mime.startsWith('video/')) return '🎬';
+      if (mime.startsWith('audio/')) return '🎵';
+      if (mime.includes('pdf')) return '📕';
+      if (mime.includes('zip') || mime.includes('compressed')) return '📦';
+      if (mime.includes('word') || mime.includes('document')) return '📝';
+      if (mime.includes('sheet') || mime.includes('excel')) return '📊';
+      if (mime.includes('presentation') || mime.includes('powerpoint')) return '📊';
+      if (mime.startsWith('text/')) return '📃';
+      return '📄';
+    }
+
+    function formatDate(ts) {
+      return new Date(ts * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    async function loadUser() {
+      try {
+        const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) return logout();
+        const user = await res.json();
+        document.getElementById('user-name').textContent = user.username;
+        document.getElementById('user-avatar').textContent = user.username[0].toUpperCase();
+      } catch {}
+    }
+
+    async function loadFiles() {
+      try {
+        const res = await fetch('/api/files', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) return;
+        files = await res.json();
+        renderFiles();
+      } catch {}
+    }
+
+    function renderFiles() {
+      const container = document.getElementById('files-container');
+      if (!files.length) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-icon">🗂️</div><p>No files yet. Upload your first file!</p></div>`;
+        return;
+      }
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Name</th>
+              <th>Size</th>
+              <th>Uploaded</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${files.map(f => `
+              <tr>
+                <td class="file-icon">${fileIcon(f.mime_type)}</td>
+                <td class="file-name">${escHtml(f.original_name)}</td>
+                <td>${formatSize(f.size)}</td>
+                <td>${formatDate(f.created_at)}</td>
+                <td>
+                  <span class="badge ${f.share_token ? 'badge-shared' : 'badge-private'}">
+                    ${f.share_token ? '🔗 Shared' : '🔒 Private'}
+                  </span>
+                </td>
+                <td>
+                  <div class="actions">
+                    <button class="btn btn-outline btn-sm" onclick="downloadFile('${f.id}')">⬇️ Download</button>
+                    <button class="btn btn-outline btn-sm" onclick="openShareModal('${f.id}')">🔗 Share</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.id}')">🗑️</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function downloadFile(id) {
+      const a = document.createElement('a');
+      a.href = `/api/files/${id}/download`;
+      a.style.display = 'none';
+      // We need auth header — use fetch + blob
+      fetch(`/api/files/${id}/download`, { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => {
+          const disp = r.headers.get('Content-Disposition') || '';
+          const match = disp.match(/filename="?([^"]+)"?/);
+          const filename = match ? match[1] : 'download';
+          return r.blob().then(blob => ({ blob, filename }));
+        })
+        .then(({ blob, filename }) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = filename;
+          document.body.appendChild(a); a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        });
+    }
+
+    async function deleteFile(id) {
+      if (!confirm('Delete this file permanently?')) return;
+      const res = await fetch(`/api/files/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) { showToast('File deleted'); loadFiles(); }
+    }
+
+    function openShareModal(id) {
+      activeFileId = id;
+      const f = files.find(x => x.id === id);
+      document.getElementById('expiry-select').value = '';
+      document.getElementById('share-link-row').style.display = 'none';
+      document.getElementById('generate-btn').style.display = 'inline-flex';
+
+      if (f.share_token) {
+        document.getElementById('share-link-input').value = `${location.origin}/share.html?token=${f.share_token}`;
+        document.getElementById('share-link-row').style.display = 'block';
+        document.getElementById('revoke-btn').style.display = 'inline-flex';
+      } else {
+        document.getElementById('revoke-btn').style.display = 'none';
+      }
+
+      document.getElementById('share-modal').classList.add('show');
+    }
+
+    function closeModal() { document.getElementById('share-modal').classList.remove('show'); }
+
+    async function generateLink() {
+      const expiry = document.getElementById('expiry-select').value;
+      const res = await fetch(`/api/files/${activeFileId}/share`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ expiresIn: expiry || undefined })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.error);
+      const url = `${location.origin}/share.html?token=${data.share_token}`;
+      document.getElementById('share-link-input').value = url;
+      document.getElementById('share-link-row').style.display = 'block';
+      document.getElementById('revoke-btn').style.display = 'inline-flex';
+      loadFiles();
+    }
+
+    async function revokeLink() {
+      if (!confirm('Revoke this share link?')) return;
+      const res = await fetch(`/api/files/${activeFileId}/share`, {
+        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) { showToast('Share link revoked'); closeModal(); loadFiles(); }
+    }
+
+    function copyLink() {
+      const val = document.getElementById('share-link-input').value;
+      navigator.clipboard.writeText(val).then(() => showToast('Link copied!'));
+    }
+
+    // Upload
+    async function uploadFiles(fileList) {
+      if (!fileList.length) return;
+      const progress = document.getElementById('upload-progress');
+      const bar = document.getElementById('progress-bar');
+      const status = document.getElementById('upload-status');
+      progress.style.display = 'block';
+      bar.style.width = '10%';
+      status.textContent = `Uploading ${fileList.length} file(s)…`;
+
+      const formData = new FormData();
+      Array.from(fileList).forEach(f => formData.append('files', f));
+
+      try {
+        const res = await fetch('/api/files/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        bar.style.width = '100%';
+        const data = await res.json();
+        if (!res.ok) { status.textContent = data.error || 'Upload failed'; return; }
+        status.textContent = `✅ ${data.length} file(s) uploaded!`;
+        setTimeout(() => { progress.style.display = 'none'; bar.style.width = '0%'; }, 2000);
+        loadFiles();
+      } catch { status.textContent = 'Upload failed — network error'; }
+    }
+
+    document.getElementById('file-input').addEventListener('change', e => {
+      uploadFiles(e.target.files);
+      e.target.value = '';
+    });
+
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      uploadFiles(e.dataTransfer.files);
+    });
+
+    dropZone.addEventListener('click', e => {
+      if (e.target === dropZone || e.target.tagName !== 'BUTTON')
+        document.getElementById('file-input').click();
+    });
+
+    document.getElementById('share-modal').addEventListener('click', e => {
+      if (e.target === document.getElementById('share-modal')) closeModal();
+    });
+
+    loadUser();
+    loadFiles();
+  </script>
+</body>
+</html>
