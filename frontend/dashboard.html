@@ -5,339 +5,596 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FileShare — Dashboard</title>
   <link rel="stylesheet" href="/css/style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div class="app-layout">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-logo">☁️ FileShare</div>
-      <nav>
-        <button class="nav-item active">📁 My Files</button>
-      </nav>
-      <div class="sidebar-footer">
-        <div class="user-pill">
-          <div class="avatar" id="user-avatar">?</div>
-          <div>
-            <div class="name" id="user-name">Loading…</div>
-          </div>
-        </div>
-        <button class="nav-item" onclick="logout()" style="margin-top:8px;">🚪 Sign Out</button>
-      </div>
-    </aside>
+<div class="app-layout">
 
-    <!-- Main -->
-    <main class="main-content">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">☁️ FileShare</div>
+    <nav>
+      <button class="nav-item active" id="nav-files" onclick="showView('files')">📁 My Files</button>
+      <button class="nav-item" id="nav-analytics" onclick="showView('analytics')">📊 Analytics</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-pill">
+        <div class="avatar" id="user-avatar">?</div>
+        <div><div class="name" id="user-name">Loading…</div></div>
+      </div>
+      <button class="nav-item" onclick="logout()" style="margin-top:8px;">🚪 Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-content">
+
+    <!-- ── FILES VIEW ── -->
+    <div id="view-files">
       <div class="page-header">
         <h2>My Files</h2>
-        <label class="btn btn-primary" style="cursor:pointer; width:auto;">
+        <label class="btn btn-primary" style="cursor:pointer;width:auto;">
           ⬆️ Upload Files
           <input type="file" id="file-input" multiple hidden />
         </label>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="Search by name or inside PDFs and text files…" />
+        <button class="btn btn-outline btn-sm" id="clear-search" onclick="clearSearch()" style="display:none;">✕ Clear</button>
       </div>
 
       <!-- Drop Zone -->
       <div class="upload-zone" id="drop-zone">
         <div class="upload-icon">📂</div>
         <h3>Drag & drop files here</h3>
-        <p>or click the Upload button above — max 100 MB per file</p>
+        <p>or click Upload Files above — max 100 MB per file</p>
         <div class="upload-progress" id="upload-progress">
           <p id="upload-status" style="font-size:13px;margin-bottom:8px;color:var(--muted);">Uploading…</p>
-          <div class="progress-bar-wrap">
-            <div class="progress-bar" id="progress-bar"></div>
-          </div>
+          <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
         </div>
       </div>
 
       <!-- File List -->
       <div class="files-section">
-        <h3>Uploaded Files</h3>
+        <h3 id="files-heading">Uploaded Files</h3>
         <div class="files-table-wrap" id="files-container">
-          <div class="empty-state">
-            <div class="empty-icon">🗂️</div>
-            <p>No files yet. Upload your first file!</p>
-          </div>
+          <div class="empty-state"><div class="empty-icon">🗂️</div><p>No files yet. Upload your first file!</p></div>
         </div>
-      </div>
-    </main>
-  </div>
-
-  <!-- Share Modal -->
-  <div class="modal-overlay" id="share-modal">
-    <div class="modal">
-      <h3>🔗 Share File</h3>
-      <div class="form-group">
-        <label>Link Expiry (optional)</label>
-        <select id="expiry-select" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;font-size:14px;outline:none;">
-          <option value="">Never expires</option>
-          <option value="1">1 hour</option>
-          <option value="24">24 hours</option>
-          <option value="72">3 days</option>
-          <option value="168">7 days</option>
-        </select>
-      </div>
-      <div id="share-link-row" style="display:none;">
-        <label style="font-size:13px;font-weight:500;display:block;margin-bottom:6px;">Share Link</label>
-        <div class="copy-row">
-          <input class="copy-input" id="share-link-input" readonly />
-          <button class="btn btn-outline btn-sm" onclick="copyLink()">📋 Copy</button>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" id="generate-btn" style="width:auto;" onclick="generateLink()">Generate Link</button>
-        <button class="btn btn-danger btn-sm" id="revoke-btn" style="display:none;" onclick="revokeLink()">Revoke</button>
       </div>
     </div>
+
+    <!-- Batch Action Bar (slides up when files are selected) -->
+    <div class="batch-bar" id="batch-bar">
+      <span class="batch-count" id="batch-count">0 files selected</span>
+      <div class="batch-actions">
+        <button class="btn btn-outline btn-sm" onclick="clearSelection()">✕ Clear</button>
+        <button class="btn btn-primary btn-sm" style="width:auto;" onclick="batchCompress()">📦 Download as ZIP</button>
+      </div>
+    </div>
+
+    <!-- ── ANALYTICS VIEW ── -->
+    <div id="view-analytics" style="display:none;">
+      <div class="page-header"><h2>Analytics</h2></div>
+
+      <!-- Stat Cards -->
+      <div class="analytics-cards">
+        <div class="stat-card">
+          <div class="stat-icon">📁</div>
+          <div class="stat-value" id="stat-files">—</div>
+          <div class="stat-label">Total Files</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">💾</div>
+          <div class="stat-value" id="stat-storage">—</div>
+          <div class="stat-label">Storage Used</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⬇️</div>
+          <div class="stat-value" id="stat-downloads">—</div>
+          <div class="stat-label">Total Downloads</div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <h3>Storage by File Type</h3>
+          <div class="chart-wrap"><canvas id="typeChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Most Downloaded Files</h3>
+          <div class="chart-wrap"><canvas id="popularChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Access Log -->
+      <div class="files-section" style="margin-top:28px;">
+        <h3>Recent File Access</h3>
+        <div class="files-table-wrap" id="access-log-container">
+          <div class="empty-state"><div class="empty-icon">📋</div><p>No access recorded yet.</p></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Share Modal ── -->
+<div class="modal-overlay" id="share-modal">
+  <div class="modal">
+    <h3>🔗 Share File</h3>
+    <div class="form-group">
+      <label>Link Expiry (optional)</label>
+      <select id="expiry-select" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;font-size:14px;outline:none;">
+        <option value="">Never expires</option>
+        <option value="1">1 hour</option>
+        <option value="24">24 hours</option>
+        <option value="72">3 days</option>
+        <option value="168">7 days</option>
+      </select>
+    </div>
+    <div id="share-link-row" style="display:none;">
+      <label style="font-size:13px;font-weight:500;display:block;margin-bottom:6px;">Share Link</label>
+      <div class="copy-row">
+        <input class="copy-input" id="share-link-input" readonly />
+        <button class="btn btn-outline btn-sm" onclick="copyLink()">📋 Copy</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('share-modal')">Cancel</button>
+      <button class="btn btn-primary" id="generate-btn" style="width:auto;" onclick="generateLink()">Generate Link</button>
+      <button class="btn btn-danger btn-sm" id="revoke-btn" style="display:none;" onclick="revokeLink()">Revoke</button>
+    </div>
   </div>
+</div>
 
-  <div class="toast" id="toast"></div>
+<!-- ── Summary Modal ── -->
+<div class="modal-overlay" id="summary-modal">
+  <div class="modal">
+    <h3>📄 File Summary</h3>
+    <p id="summary-filename" style="font-size:13px;color:var(--muted);margin-bottom:12px;"></p>
+    <div id="summary-tags" style="margin-bottom:12px;"></div>
+    <div class="summary-box" id="summary-content"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('summary-modal')">Close</button>
+    </div>
+  </div>
+</div>
 
-  <script>
-    const API = '';
-    const token = localStorage.getItem('token');
-    if (!token) location.href = '/index.html';
+<!-- ── Duplicate Modal ── -->
+<div class="modal-overlay" id="dup-modal">
+  <div class="modal">
+    <h3>⚠️ Duplicate File Detected</h3>
+    <p style="margin-bottom:12px;color:var(--muted);font-size:14px;">A file with identical content already exists in your storage.</p>
+    <div class="dup-info-box">
+      <div><span class="dup-label">Existing file:</span> <strong id="dup-existing-name"></strong></div>
+      <div style="margin-top:4px;"><span class="dup-label">You're uploading:</span> <strong id="dup-new-name"></strong></div>
+    </div>
+    <p style="margin-top:12px;font-size:13px;color:var(--muted);">Do you want to upload it anyway?</p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('dup-modal')">Cancel</button>
+      <button class="btn btn-primary" style="width:auto;" onclick="forceUpload()">Upload Anyway</button>
+    </div>
+  </div>
+</div>
 
-    let files = [];
-    let activeFileId = null;
 
-    function authHeaders() {
-      return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+<div class="toast" id="toast"></div>
+
+<script>
+const token = localStorage.getItem('token');
+if (!token) location.href = '/index.html';
+
+let files = [];
+let activeFileId = null;
+let pendingDupFiles = null;
+let typeChart = null, popularChart = null;
+let selectedIds = new Set();
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+const authH = () => ({ 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' });
+function logout() { localStorage.clear(); location.href = '/index.html'; }
+function showToast(msg, dur = 3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function formatSize(b) {
+  if (!b) return '0 B';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
+}
+function formatDate(ts) {
+  return new Date(ts * 1000).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+}
+function formatDateTime(ts) {
+  return new Date(ts * 1000).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function fileIcon(mime) {
+  if (!mime) return '📄';
+  if (mime.startsWith('image/')) return '🖼️';
+  if (mime.startsWith('video/')) return '🎬';
+  if (mime.startsWith('audio/')) return '🎵';
+  if (mime.includes('pdf'))      return '📕';
+  if (mime.includes('zip') || mime.includes('compressed')) return '📦';
+  if (mime.includes('sheet') || mime.includes('excel'))    return '📊';
+  if (mime.includes('word') || mime.includes('document'))  return '📝';
+  if (mime.startsWith('text/')) return '📃';
+  return '📄';
+}
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+const TAG_COLORS = {
+  image:'tag-blue', video:'tag-purple', audio:'tag-purple', pdf:'tag-red',
+  document:'tag-gray', text:'tag-gray', spreadsheet:'tag-green', presentation:'tag-orange',
+  archive:'tag-gray', code:'tag-teal', invoice:'tag-yellow', receipt:'tag-yellow',
+  notes:'tag-blue', report:'tag-red', resume:'tag-green', contract:'tag-orange',
+  budget:'tag-green', photo:'tag-blue',
+};
+function renderTags(tags) {
+  if (!tags || !tags.length) return '<span style="color:var(--muted);font-size:12px;">—</span>';
+  return tags.map(t => `<span class="tag ${TAG_COLORS[t]||'tag-gray'}">${t}</span>`).join('');
+}
+
+// ── View toggle ───────────────────────────────────────────────────────────
+function showView(view) {
+  document.getElementById('view-files').style.display     = view === 'files'     ? '' : 'none';
+  document.getElementById('view-analytics').style.display = view === 'analytics' ? '' : 'none';
+  document.getElementById('nav-files').classList.toggle('active',     view === 'files');
+  document.getElementById('nav-analytics').classList.toggle('active', view === 'analytics');
+  if (view === 'analytics') loadAnalytics();
+}
+
+// ── Load user ─────────────────────────────────────────────────────────────
+async function loadUser() {
+  try {
+    const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` }});
+    if (!res.ok) return logout();
+    const u = await res.json();
+    document.getElementById('user-name').textContent   = u.username;
+    document.getElementById('user-avatar').textContent = u.username[0].toUpperCase();
+  } catch {}
+}
+
+// ── Files ─────────────────────────────────────────────────────────────────
+async function loadFiles() {
+  try {
+    const res = await fetch('/api/files', { headers: { 'Authorization': `Bearer ${token}` }});
+    if (!res.ok) return;
+    files = await res.json();
+    renderFiles(files, 'Uploaded Files');
+  } catch {}
+}
+
+function renderFiles(list, heading) {
+  document.getElementById('files-heading').textContent = heading;
+  const container = document.getElementById('files-container');
+  selectedIds.clear(); updateBatchBar();
+  if (!list.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🗂️</div><p>No files found.</p></div>`;
+    return;
+  }
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)" title="Select all" /></th>
+          <th></th><th>Name</th><th>Tags</th><th>Size</th><th>Downloads</th><th>Uploaded</th><th>Status</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${list.map(f => `
+          <tr id="row-${f.id}">
+            <td><input type="checkbox" class="file-cb" value="${f.id}" onchange="toggleSelect('${f.id}', this.checked)" /></td>
+            <td class="file-icon">${fileIcon(f.mime_type)}</td>
+            <td>
+              <div class="file-name">${escHtml(f.original_name)}</div>
+              ${f.snippet ? `<div class="search-snippet">${escHtml(f.snippet)}</div>` : ''}
+            </td>
+            <td>${renderTags(f.tags)}</td>
+            <td>${formatSize(f.size)}</td>
+            <td><span class="download-count">${f.download_count || 0}</span></td>
+            <td>${formatDate(f.created_at)}</td>
+            <td><span class="badge ${f.share_token ? 'badge-shared' : 'badge-private'}">
+              ${f.share_token ? '🔗 Shared' : '🔒 Private'}
+            </span></td>
+            <td>
+              <div class="actions">
+                <button class="btn btn-outline btn-sm" title="Download" onclick="downloadFile('${f.id}')">⬇️</button>
+                ${f.summary ? `<button class="btn btn-outline btn-sm" title="Summary" onclick="showSummary('${f.id}')">📄</button>` : ''}
+                <button class="btn btn-outline btn-sm" title="Share" onclick="openShareModal('${f.id}')">🔗</button>
+                <button class="btn btn-danger btn-sm" title="Delete" onclick="deleteFile('${f.id}')">🗑️</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── Search ────────────────────────────────────────────────────────────────
+let searchTimer;
+document.getElementById('search-input').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  const q = this.value.trim();
+  document.getElementById('clear-search').style.display = q ? 'inline-flex' : 'none';
+  if (!q) { renderFiles(files, 'Uploaded Files'); return; }
+  searchTimer = setTimeout(() => runSearch(q), 300);
+});
+
+async function runSearch(q) {
+  try {
+    const res  = await fetch(`/api/files/search?q=${encodeURIComponent(q)}`, { headers: { 'Authorization': `Bearer ${token}` }});
+    const data = await res.json();
+    renderFiles(data, `Results for "${q}" (${data.length})`);
+  } catch {}
+}
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('clear-search').style.display = 'none';
+  renderFiles(files, 'Uploaded Files');
+}
+
+// ── Download ──────────────────────────────────────────────────────────────
+function downloadFile(id) {
+  fetch(`/api/files/${id}/download`, { headers: { 'Authorization': `Bearer ${token}` }})
+    .then(r => {
+      const m = (r.headers.get('Content-Disposition') || '').match(/filename="?([^"]+)"?/);
+      return r.blob().then(b => ({ b, name: m ? m[1] : 'download' }));
+    })
+    .then(({ b, name }) => {
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(b), download: name });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    })
+    .then(() => loadFiles());
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────
+async function deleteFile(id) {
+  if (!confirm('Delete this file permanently?')) return;
+  const res = await fetch(`/api/files/${id}`, { method:'DELETE', headers:{ 'Authorization':`Bearer ${token}` }});
+  if (res.ok) { showToast('File deleted'); loadFiles(); }
+}
+
+// ── Summary ───────────────────────────────────────────────────────────────
+function showSummary(id) {
+  const f = files.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('summary-filename').textContent = f.original_name;
+  document.getElementById('summary-tags').innerHTML       = renderTags(f.tags);
+  document.getElementById('summary-content').textContent  = f.summary || 'No summary available.';
+  document.getElementById('summary-modal').classList.add('show');
+}
+
+// ── Share ─────────────────────────────────────────────────────────────────
+function openShareModal(id) {
+  activeFileId = id;
+  const f = files.find(x => x.id === id);
+  document.getElementById('expiry-select').value = '';
+  document.getElementById('share-link-row').style.display = 'none';
+  document.getElementById('revoke-btn').style.display     = f && f.share_token ? 'inline-flex' : 'none';
+  if (f && f.share_token) {
+    document.getElementById('share-link-input').value = `${location.origin}/share.html?token=${f.share_token}`;
+    document.getElementById('share-link-row').style.display = 'block';
+  }
+  document.getElementById('share-modal').classList.add('show');
+}
+async function generateLink() {
+  const expiry = document.getElementById('expiry-select').value;
+  const res  = await fetch(`/api/files/${activeFileId}/share`, { method:'POST', headers:authH(), body:JSON.stringify({ expiresIn: expiry||undefined })});
+  const data = await res.json();
+  if (!res.ok) return showToast(data.error);
+  const url = `${location.origin}/share.html?token=${data.share_token}`;
+  document.getElementById('share-link-input').value = url;
+  document.getElementById('share-link-row').style.display = 'block';
+  document.getElementById('revoke-btn').style.display     = 'inline-flex';
+  loadFiles();
+}
+async function revokeLink() {
+  if (!confirm('Revoke this share link?')) return;
+  const res = await fetch(`/api/files/${activeFileId}/share`, { method:'DELETE', headers:{ 'Authorization':`Bearer ${token}` }});
+  if (res.ok) { showToast('Link revoked'); closeModal('share-modal'); loadFiles(); }
+}
+function copyLink() {
+  navigator.clipboard.writeText(document.getElementById('share-link-input').value).then(() => showToast('Link copied!'));
+}
+
+// ── Upload + Duplicate ────────────────────────────────────────────────────
+async function uploadFiles(fileList, force = false) {
+  if (!fileList || !fileList.length) return;
+  const progress = document.getElementById('upload-progress');
+  const bar      = document.getElementById('progress-bar');
+  const status   = document.getElementById('upload-status');
+  progress.style.display = 'block'; bar.style.width = '10%';
+  status.textContent = `Uploading ${fileList.length} file(s)…`;
+
+  const form = new FormData();
+  Array.from(fileList).forEach(f => form.append('files', f));
+  try {
+    const res  = await fetch(force ? '/api/files/upload?force=true' : '/api/files/upload', {
+      method:'POST', headers:{ 'Authorization':`Bearer ${token}` }, body:form
+    });
+    bar.style.width = '100%';
+    const data = await res.json();
+    if (res.status === 409 && data.duplicate) {
+      progress.style.display = 'none'; bar.style.width = '0%';
+      pendingDupFiles = fileList;
+      document.getElementById('dup-existing-name').textContent = data.existing.original_name;
+      document.getElementById('dup-new-name').textContent      = data.filename;
+      document.getElementById('dup-modal').classList.add('show');
+      return;
     }
+    if (!res.ok) { status.textContent = data.error || 'Upload failed'; return; }
+    status.textContent = `✅ ${data.length} file(s) uploaded!`;
+    setTimeout(() => { progress.style.display='none'; bar.style.width='0%'; }, 2000);
+    loadFiles();
+  } catch { status.textContent = 'Upload failed — network error'; }
+}
+function forceUpload() {
+  closeModal('dup-modal');
+  if (pendingDupFiles) { uploadFiles(pendingDupFiles, true); pendingDupFiles = null; }
+}
 
-    function logout() {
-      localStorage.clear();
-      location.href = '/index.html';
-    }
+document.getElementById('file-input').addEventListener('change', e => { uploadFiles(e.target.files); e.target.value=''; });
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); uploadFiles(e.dataTransfer.files); });
+dropZone.addEventListener('click', e => { if (!e.target.closest('button')) document.getElementById('file-input').click(); });
+['share-modal','summary-modal','dup-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => { if (e.target.id===id) closeModal(id); });
+});
 
-    function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 3000);
-    }
+// ── Selection & Batch ─────────────────────────────────────────────────────
+function toggleSelect(id, checked) {
+  checked ? selectedIds.add(id) : selectedIds.delete(id);
+  document.getElementById(`row-${id}`).classList.toggle('row-selected', checked);
+  updateBatchBar();
+}
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.file-cb').forEach(el => {
+    el.checked = cb.checked;
+    toggleSelect(el.value, cb.checked);
+  });
+}
+function clearSelection() {
+  selectedIds.clear();
+  document.querySelectorAll('.file-cb').forEach(el => el.checked = false);
+  const sa = document.getElementById('select-all');
+  if (sa) sa.checked = false;
+  updateBatchBar();
+}
+function updateBatchBar() {
+  const bar = document.getElementById('batch-bar');
+  const n   = selectedIds.size;
+  bar.classList.toggle('visible', n > 0);
+  document.getElementById('batch-count').textContent = `${n} file${n !== 1 ? 's' : ''} selected`;
+}
 
-    function formatSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
 
-    function fileIcon(mime) {
-      if (!mime) return '📄';
-      if (mime.startsWith('image/')) return '🖼️';
-      if (mime.startsWith('video/')) return '🎬';
-      if (mime.startsWith('audio/')) return '🎵';
-      if (mime.includes('pdf')) return '📕';
-      if (mime.includes('zip') || mime.includes('compressed')) return '📦';
-      if (mime.includes('word') || mime.includes('document')) return '📝';
-      if (mime.includes('sheet') || mime.includes('excel')) return '📊';
-      if (mime.includes('presentation') || mime.includes('powerpoint')) return '📊';
-      if (mime.startsWith('text/')) return '📃';
-      return '📄';
-    }
+async function batchCompress() {
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  showToast(`Compressing ${ids.length} file(s)…`);
+  try {
+    const res  = await fetch('/api/files/compress-batch', {
+      method: 'POST', headers: authH(), body: JSON.stringify({ file_ids: ids })
+    });
+    if (!res.ok) { const d = await res.json(); showToast(d.error || 'Compression failed'); return; }
+    const orig = parseInt(res.headers.get('X-Original-Size')   || '0');
+    const comp = parseInt(res.headers.get('X-Compressed-Size') || '0');
+    const blob = await res.blob();
+    const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'fileshare_batch.zip' });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    clearSelection();
+    showCompressResult(orig, comp, `${ids.length} files`);
+    loadFiles();
+  } catch { showToast('Compression failed — network error'); }
+}
 
-    function formatDate(ts) {
-      return new Date(ts * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    }
+// ── Analytics ─────────────────────────────────────────────────────────────
+function mimeLabel(mime) {
+  if (!mime) return 'Other';
+  if (mime.startsWith('image/')) return 'Images';
+  if (mime.startsWith('video/')) return 'Videos';
+  if (mime.startsWith('audio/')) return 'Audio';
+  if (mime.includes('pdf'))      return 'PDFs';
+  if (mime.includes('zip') || mime.includes('compressed')) return 'Archives';
+  if (mime.includes('sheet') || mime.includes('excel'))    return 'Spreadsheets';
+  if (mime.includes('word') || mime.includes('document'))  return 'Documents';
+  if (mime.startsWith('text/')) return 'Text';
+  return 'Other';
+}
 
-    async function loadUser() {
-      try {
-        const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!res.ok) return logout();
-        const user = await res.json();
-        document.getElementById('user-name').textContent = user.username;
-        document.getElementById('user-avatar').textContent = user.username[0].toUpperCase();
-      } catch {}
-    }
+const PALETTE = ['#4f46e5','#7c3aed','#2563eb','#059669','#d97706','#dc2626','#0891b2','#9333ea'];
 
-    async function loadFiles() {
-      try {
-        const res = await fetch('/api/files', { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!res.ok) return;
-        files = await res.json();
-        renderFiles();
-      } catch {}
-    }
+async function loadAnalytics() {
+  try {
+    const res  = await fetch('/api/analytics', { headers:{ 'Authorization':`Bearer ${token}` }});
+    const data = await res.json();
 
-    function renderFiles() {
-      const container = document.getElementById('files-container');
-      if (!files.length) {
-        container.innerHTML = `<div class="empty-state"><div class="empty-icon">🗂️</div><p>No files yet. Upload your first file!</p></div>`;
-        return;
+    // Stat cards
+    document.getElementById('stat-files').textContent     = data.total_files;
+    document.getElementById('stat-storage').textContent   = formatSize(data.total_size);
+    document.getElementById('stat-downloads').textContent = data.total_downloads;
+
+    // Storage doughnut chart
+    const typeLabels = data.storage_by_type.map(r => mimeLabel(r.mime_type));
+    const typeSizes  = data.storage_by_type.map(r => r.total_size);
+    if (typeChart) typeChart.destroy();
+    typeChart = new Chart(document.getElementById('typeChart'), {
+      type: 'doughnut',
+      data: {
+        labels:   typeLabels.length ? typeLabels : ['No files'],
+        datasets: [{ data: typeSizes.length ? typeSizes : [1],
+          backgroundColor: PALETTE, borderWidth: 2, borderColor: '#fff' }]
+      },
+      options: {
+        plugins: {
+          legend: { position: 'bottom', labels:{ font:{ size:12 }, padding:12 }},
+          tooltip: { callbacks: { label: ctx => ` ${mimeLabel(data.storage_by_type[ctx.dataIndex]?.mime_type)}: ${formatSize(ctx.raw)}` }}
+        },
+        cutout: '60%',
       }
-      container.innerHTML = `
+    });
+
+    // Top files bar chart
+    const topLabels  = data.top_files.map(f => f.original_name.length > 20 ? f.original_name.slice(0,18)+'…' : f.original_name);
+    const topCounts  = data.top_files.map(f => f.download_count);
+    if (popularChart) popularChart.destroy();
+    popularChart = new Chart(document.getElementById('popularChart'), {
+      type: 'bar',
+      data: {
+        labels: topLabels.length ? topLabels : ['No downloads yet'],
+        datasets: [{ label: 'Downloads', data: topCounts.length ? topCounts : [0],
+          backgroundColor: '#4f46e5', borderRadius: 6, borderSkipped: false }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false }},
+        scales: {
+          x: { beginAtZero:true, ticks:{ stepSize:1 }, grid:{ color:'#f1f5f9' }},
+          y: { grid:{ display:false }}
+        }
+      }
+    });
+
+    // Access log table
+    const logEl = document.getElementById('access-log-container');
+    if (!data.recent_access.length) {
+      logEl.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>No file access recorded yet. Downloads will appear here.</p></div>`;
+    } else {
+      logEl.innerHTML = `
         <table>
           <thead>
-            <tr>
-              <th></th>
-              <th>Name</th>
-              <th>Size</th>
-              <th>Uploaded</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
+            <tr><th>File</th><th>Accessor</th><th>IP Address</th><th>Type</th><th>Time</th></tr>
           </thead>
           <tbody>
-            ${files.map(f => `
+            ${data.recent_access.map(a => `
               <tr>
-                <td class="file-icon">${fileIcon(f.mime_type)}</td>
-                <td class="file-name">${escHtml(f.original_name)}</td>
-                <td>${formatSize(f.size)}</td>
-                <td>${formatDate(f.created_at)}</td>
-                <td>
-                  <span class="badge ${f.share_token ? 'badge-shared' : 'badge-private'}">
-                    ${f.share_token ? '🔗 Shared' : '🔒 Private'}
-                  </span>
-                </td>
-                <td>
-                  <div class="actions">
-                    <button class="btn btn-outline btn-sm" onclick="downloadFile('${f.id}')">⬇️ Download</button>
-                    <button class="btn btn-outline btn-sm" onclick="openShareModal('${f.id}')">🔗 Share</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.id}')">🗑️</button>
-                  </div>
-                </td>
-              </tr>
-            `).join('')}
+                <td class="file-name">${escHtml(a.file_name)}</td>
+                <td><span class="accessor-pill">${escHtml(a.accessor)}</span></td>
+                <td style="color:var(--muted);font-size:12px;">${escHtml(a.ip_address||'—')}</td>
+                <td><span class="badge ${a.access_type==='download'?'badge-shared':'badge-private'}">${a.access_type}</span></td>
+                <td style="font-size:12px;color:var(--muted);">${formatDateTime(a.accessed_at)}</td>
+              </tr>`).join('')}
           </tbody>
         </table>`;
     }
+  } catch(e) { console.error(e); }
+}
 
-    function escHtml(str) {
-      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    function downloadFile(id) {
-      const a = document.createElement('a');
-      a.href = `/api/files/${id}/download`;
-      a.style.display = 'none';
-      // We need auth header — use fetch + blob
-      fetch(`/api/files/${id}/download`, { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(r => {
-          const disp = r.headers.get('Content-Disposition') || '';
-          const match = disp.match(/filename="?([^"]+)"?/);
-          const filename = match ? match[1] : 'download';
-          return r.blob().then(blob => ({ blob, filename }));
-        })
-        .then(({ blob, filename }) => {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = filename;
-          document.body.appendChild(a); a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        });
-    }
-
-    async function deleteFile(id) {
-      if (!confirm('Delete this file permanently?')) return;
-      const res = await fetch(`/api/files/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-      if (res.ok) { showToast('File deleted'); loadFiles(); }
-    }
-
-    function openShareModal(id) {
-      activeFileId = id;
-      const f = files.find(x => x.id === id);
-      document.getElementById('expiry-select').value = '';
-      document.getElementById('share-link-row').style.display = 'none';
-      document.getElementById('generate-btn').style.display = 'inline-flex';
-
-      if (f.share_token) {
-        document.getElementById('share-link-input').value = `${location.origin}/share.html?token=${f.share_token}`;
-        document.getElementById('share-link-row').style.display = 'block';
-        document.getElementById('revoke-btn').style.display = 'inline-flex';
-      } else {
-        document.getElementById('revoke-btn').style.display = 'none';
-      }
-
-      document.getElementById('share-modal').classList.add('show');
-    }
-
-    function closeModal() { document.getElementById('share-modal').classList.remove('show'); }
-
-    async function generateLink() {
-      const expiry = document.getElementById('expiry-select').value;
-      const res = await fetch(`/api/files/${activeFileId}/share`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ expiresIn: expiry || undefined })
-      });
-      const data = await res.json();
-      if (!res.ok) return showToast(data.error);
-      const url = `${location.origin}/share.html?token=${data.share_token}`;
-      document.getElementById('share-link-input').value = url;
-      document.getElementById('share-link-row').style.display = 'block';
-      document.getElementById('revoke-btn').style.display = 'inline-flex';
-      loadFiles();
-    }
-
-    async function revokeLink() {
-      if (!confirm('Revoke this share link?')) return;
-      const res = await fetch(`/api/files/${activeFileId}/share`, {
-        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) { showToast('Share link revoked'); closeModal(); loadFiles(); }
-    }
-
-    function copyLink() {
-      const val = document.getElementById('share-link-input').value;
-      navigator.clipboard.writeText(val).then(() => showToast('Link copied!'));
-    }
-
-    // Upload
-    async function uploadFiles(fileList) {
-      if (!fileList.length) return;
-      const progress = document.getElementById('upload-progress');
-      const bar = document.getElementById('progress-bar');
-      const status = document.getElementById('upload-status');
-      progress.style.display = 'block';
-      bar.style.width = '10%';
-      status.textContent = `Uploading ${fileList.length} file(s)…`;
-
-      const formData = new FormData();
-      Array.from(fileList).forEach(f => formData.append('files', f));
-
-      try {
-        const res = await fetch('/api/files/upload', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
-        bar.style.width = '100%';
-        const data = await res.json();
-        if (!res.ok) { status.textContent = data.error || 'Upload failed'; return; }
-        status.textContent = `✅ ${data.length} file(s) uploaded!`;
-        setTimeout(() => { progress.style.display = 'none'; bar.style.width = '0%'; }, 2000);
-        loadFiles();
-      } catch { status.textContent = 'Upload failed — network error'; }
-    }
-
-    document.getElementById('file-input').addEventListener('change', e => {
-      uploadFiles(e.target.files);
-      e.target.value = '';
-    });
-
-    const dropZone = document.getElementById('drop-zone');
-    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop', e => {
-      e.preventDefault();
-      dropZone.classList.remove('dragover');
-      uploadFiles(e.dataTransfer.files);
-    });
-
-    dropZone.addEventListener('click', e => {
-      if (e.target === dropZone || e.target.tagName !== 'BUTTON')
-        document.getElementById('file-input').click();
-    });
-
-    document.getElementById('share-modal').addEventListener('click', e => {
-      if (e.target === document.getElementById('share-modal')) closeModal();
-    });
-
-    loadUser();
-    loadFiles();
-  </script>
+// ── Init ──────────────────────────────────────────────────────────────────
+loadUser();
+loadFiles();
+</script>
 </body>
 </html>
