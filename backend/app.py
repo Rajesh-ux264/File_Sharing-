@@ -453,7 +453,7 @@ def download_public_file(file_id):
     return send_file(str(path), as_attachment=True, download_name=row["original_name"])
 
 
-@app.route("/api/files/<file_id>/visibility", methods=["POST"])
+@app.route("/api/visibility/<file_id>", methods=["POST"])
 @jwt_required()
 def toggle_visibility(file_id):
     user_id = get_jwt_identity()

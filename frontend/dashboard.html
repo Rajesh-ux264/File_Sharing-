@@ -535,7 +535,7 @@ function setUploadVisibility(pub) {
 // ── Visibility Toggle ─────────────────────────────────────────────────────
 async function toggleVisibility(id) {
   try {
-    const res = await fetch(`/api/files/${id}/visibility`, { method: 'POST', headers: authH() });
+    const res = await fetch(`/api/visibility/${id}`, { method: 'POST', headers: authH() });
     const raw = await res.text();
     let data;
     try { data = JSON.parse(raw); } catch {
