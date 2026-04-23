@@ -59,7 +59,7 @@
       <div class="upload-zone" id="drop-zone">
         <div class="upload-icon">📂</div>
         <h3>Drag & drop files here</h3>
-        <p>or click Upload Files above — max 100 MB per file</p>
+        <p>or click Upload Files above — max 1 GB per file</p>
         <div class="upload-progress" id="upload-progress">
           <p id="upload-status" style="font-size:13px;margin-bottom:8px;color:var(--muted);">Uploading…</p>
           <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
@@ -534,7 +534,7 @@ function setUploadVisibility(pub) {
 
 // ── Visibility Toggle ─────────────────────────────────────────────────────
 async function toggleVisibility(id) {
-  const res  = await fetch(`/api/files/${id}/visibility`, { method: 'PATCH', headers: authH() });
+  const res  = await fetch(`/api/files/${id}/visibility`, { method: 'POST', headers: authH() });
   const data = await res.json();
   if (!res.ok) { showToast(data.error || 'Failed to update visibility'); return; }
   showToast(data.is_public ? '🌐 File is now public to all users' : '🔒 File is now private');
