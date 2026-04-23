@@ -534,11 +534,19 @@ function setUploadVisibility(pub) {
 
 // ── Visibility Toggle ─────────────────────────────────────────────────────
 async function toggleVisibility(id) {
-  const res  = await fetch(`/api/files/${id}/visibility`, { method: 'POST', headers: authH() });
-  const data = await res.json();
-  if (!res.ok) { showToast(data.error || 'Failed to update visibility'); return; }
-  showToast(data.is_public ? '🌐 File is now public to all users' : '🔒 File is now private');
-  loadFiles();
+  try {
+    const res = await fetch(`/api/files/${id}/visibility`, { method: 'POST', headers: authH() });
+    const raw = await res.text();
+    let data;
+    try { data = JSON.parse(raw); } catch {
+      showToast(`Server error ${res.status}`);
+      console.error('visibility response:', raw.slice(0, 300));
+      return;
+    }
+    if (!res.ok) { showToast(data.error || 'Failed to update visibility'); return; }
+    showToast(data.is_public ? '🌐 File is now public to all users' : '🔒 File is now private');
+    loadFiles();
+  } catch { showToast('Cannot reach server'); }
 }
 
 // ── Shared Drive ──────────────────────────────────────────────────────────

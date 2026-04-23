@@ -463,7 +463,7 @@ def toggle_visibility(file_id):
     ).fetchone())
     if not row:
         return jsonify({"error": "File not found"}), 404
-    new_val = 0 if row["is_public"] else 1
+    new_val = 0 if row.get("is_public", 0) else 1
     db.execute("UPDATE files SET is_public=? WHERE id=?", (new_val, file_id))
     db.commit()
     return jsonify({"is_public": bool(new_val)})
