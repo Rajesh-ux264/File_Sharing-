@@ -453,10 +453,14 @@ def download_public_file(file_id):
     return send_file(str(path), as_attachment=True, download_name=row["original_name"])
 
 
-@app.route("/api/visibility/<file_id>", methods=["POST"])
+@app.route("/api/toggle-visibility", methods=["POST"])
 @jwt_required()
-def toggle_visibility(file_id):
+def toggle_visibility():
     user_id = get_jwt_identity()
+    data    = request.get_json(silent=True) or {}
+    file_id = data.get("file_id")
+    if not file_id:
+        return jsonify({"error": "file_id required"}), 400
     db  = get_db()
     row = row_to_dict(db.execute(
         "SELECT * FROM files WHERE id=? AND owner_id=?", (file_id, user_id)
