@@ -104,6 +104,7 @@ def init_db():
             "file_hash":      "TEXT",
             "content_text":   "TEXT DEFAULT ''",
             "download_count": "INTEGER DEFAULT 0",
+            "is_public":      "INTEGER DEFAULT 0",
         }
         for col, definition in migrations.items():
             if col not in existing:
@@ -303,7 +304,7 @@ def list_files():
     db   = get_db()
     rows = db.execute(
         "SELECT id, original_name, mime_type, size, share_token, share_expires, "
-        "tags, summary, download_count, created_at FROM files WHERE owner_id=? ORDER BY created_at DESC",
+        "tags, summary, download_count, is_public, created_at FROM files WHERE owner_id=? ORDER BY created_at DESC",
         (user_id,)
     ).fetchall()
     result = []
@@ -392,19 +393,20 @@ def upload_files():
                     "existing":   dup,
                 }), 409
 
-        mime    = f.content_type or "application/octet-stream"
-        content = extract_text(dest, mime)
-        tags    = detect_tags(original, mime, content)
-        summary = generate_summary(content)
+        mime      = f.content_type or "application/octet-stream"
+        content   = extract_text(dest, mime)
+        tags      = detect_tags(original, mime, content)
+        summary   = generate_summary(content)
+        is_public = 1 if request.form.get("is_public") == "true" else 0
 
         fid = str(uuid.uuid4())
         db.execute(
             "INSERT INTO files "
             "(id, owner_id, original_name, stored_name, mime_type, size, "
-            " tags, summary, file_hash, content_text) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            " tags, summary, file_hash, content_text, is_public) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (fid, user_id, original, stored, mime, size,
-             json.dumps(tags), summary, file_hash, content[:50000])
+             json.dumps(tags), summary, file_hash, content[:50000], is_public)
         )
         results.append({
             "id": fid, "original_name": original,
@@ -414,6 +416,57 @@ def upload_files():
 
     db.commit()
     return jsonify(results), 201
+
+
+@app.route("/api/files/public")
+@jwt_required()
+def public_files():
+    db   = get_db()
+    rows = db.execute(
+        "SELECT f.id, f.original_name, f.mime_type, f.size, f.tags, "
+        "f.download_count, f.created_at, u.username AS owner_name "
+        "FROM files f JOIN users u ON f.owner_id = u.id "
+        "WHERE f.is_public = 1 ORDER BY f.created_at DESC"
+    ).fetchall()
+    result = []
+    for row in rows:
+        r = dict(row)
+        r["tags"] = parse_tags(r.get("tags"))
+        result.append(r)
+    return jsonify(result)
+
+
+@app.route("/api/files/public/<file_id>/download")
+@jwt_required()
+def download_public_file(file_id):
+    db  = get_db()
+    row = row_to_dict(db.execute(
+        "SELECT * FROM files WHERE id=? AND is_public=1", (file_id,)
+    ).fetchone())
+    if not row:
+        return jsonify({"error": "File not found or not public"}), 404
+    path = UPLOAD_DIR / row["stored_name"]
+    if not path.exists():
+        return jsonify({"error": "File data missing"}), 404
+    username = get_jwt().get("username", "unknown")
+    log_access(db, file_id, row["original_name"], username, "download")
+    return send_file(str(path), as_attachment=True, download_name=row["original_name"])
+
+
+@app.route("/api/files/<file_id>/visibility", methods=["PATCH"])
+@jwt_required()
+def toggle_visibility(file_id):
+    user_id = get_jwt_identity()
+    db  = get_db()
+    row = row_to_dict(db.execute(
+        "SELECT * FROM files WHERE id=? AND owner_id=?", (file_id, user_id)
+    ).fetchone())
+    if not row:
+        return jsonify({"error": "File not found"}), 404
+    new_val = 0 if row["is_public"] else 1
+    db.execute("UPDATE files SET is_public=? WHERE id=?", (new_val, file_id))
+    db.commit()
+    return jsonify({"is_public": bool(new_val)})
 
 
 @app.route("/api/files/<file_id>/download")

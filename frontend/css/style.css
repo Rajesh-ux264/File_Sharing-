@@ -312,8 +312,9 @@ tbody tr:hover { background: #f8fafc; }
   font-weight: 600;
 }
 
-.badge-shared { background: #dcfce7; color: #15803d; }
+.badge-shared  { background: #dcfce7; color: #15803d; }
 .badge-private { background: var(--bg); color: var(--muted); }
+.badge-public  { background: #dbeafe; color: #1d4ed8; }
 
 .actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
@@ -574,6 +575,42 @@ tbody tr:hover { background: #f8fafc; }
   font-size: 12px;
   font-weight: 500;
 }
+
+.owner-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Visibility toggle bar */
+.vis-toggle-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.vis-label { font-size: 13px; font-weight: 500; color: var(--muted); }
+.vis-btn {
+  padding: 6px 14px;
+  border-radius: 99px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.15s;
+}
+.vis-btn.active {
+  border-color: var(--primary);
+  background: #ede9fe;
+  color: var(--primary);
+}
+.vis-btn:hover:not(.active) { background: var(--bg); }
 
 
 .row-selected td { background: #ede9fe !important; }

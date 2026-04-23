@@ -16,6 +16,7 @@
     <div class="sidebar-logo">☁️ FileShare</div>
     <nav>
       <button class="nav-item active" id="nav-files" onclick="showView('files')">📁 My Files</button>
+      <button class="nav-item" id="nav-shared" onclick="showView('shared')">🌐 Shared Drive</button>
       <button class="nav-item" id="nav-analytics" onclick="showView('analytics')">📊 Analytics</button>
     </nav>
     <div class="sidebar-footer">
@@ -47,6 +48,13 @@
         <button class="btn btn-outline btn-sm" id="clear-search" onclick="clearSearch()" style="display:none;">✕ Clear</button>
       </div>
 
+      <!-- Visibility Toggle -->
+      <div class="vis-toggle-bar">
+        <span class="vis-label">Upload as:</span>
+        <button class="vis-btn active" id="vis-private" onclick="setUploadVisibility(false)">🔒 Private</button>
+        <button class="vis-btn" id="vis-public" onclick="setUploadVisibility(true)">🌐 Public to all users</button>
+      </div>
+
       <!-- Drop Zone -->
       <div class="upload-zone" id="drop-zone">
         <div class="upload-icon">📂</div>
@@ -73,6 +81,17 @@
       <div class="batch-actions">
         <button class="btn btn-outline btn-sm" onclick="clearSelection()">✕ Clear</button>
         <button class="btn btn-primary btn-sm" style="width:auto;" onclick="batchCompress()">📦 Download as ZIP</button>
+      </div>
+    </div>
+
+    <!-- ── SHARED DRIVE VIEW ── -->
+    <div id="view-shared" style="display:none;">
+      <div class="page-header"><h2>🌐 Shared Drive</h2></div>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:20px;">Files shared by all users on this system. You can view and download them.</p>
+      <div class="files-section">
+        <div class="files-table-wrap" id="shared-container">
+          <div class="empty-state"><div class="empty-icon">🌐</div><p>No shared files yet.</p></div>
+        </div>
       </div>
     </div>
 
@@ -194,6 +213,7 @@ let activeFileId = null;
 let pendingDupFiles = null;
 let typeChart = null, popularChart = null;
 let selectedIds = new Set();
+let uploadPublic = false;
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const authH = () => ({ 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' });
@@ -248,10 +268,13 @@ function renderTags(tags) {
 // ── View toggle ───────────────────────────────────────────────────────────
 function showView(view) {
   document.getElementById('view-files').style.display     = view === 'files'     ? '' : 'none';
+  document.getElementById('view-shared').style.display    = view === 'shared'    ? '' : 'none';
   document.getElementById('view-analytics').style.display = view === 'analytics' ? '' : 'none';
   document.getElementById('nav-files').classList.toggle('active',     view === 'files');
+  document.getElementById('nav-shared').classList.toggle('active',    view === 'shared');
   document.getElementById('nav-analytics').classList.toggle('active', view === 'analytics');
   if (view === 'analytics') loadAnalytics();
+  if (view === 'shared')    loadSharedFiles();
 }
 
 // ── Load user ─────────────────────────────────────────────────────────────
@@ -304,13 +327,14 @@ function renderFiles(list, heading) {
             <td>${formatSize(f.size)}</td>
             <td><span class="download-count">${f.download_count || 0}</span></td>
             <td>${formatDate(f.created_at)}</td>
-            <td><span class="badge ${f.share_token ? 'badge-shared' : 'badge-private'}">
-              ${f.share_token ? '🔗 Shared' : '🔒 Private'}
-            </span></td>
+            <td>
+              ${f.is_public ? '<span class="badge badge-public">🌐 Public</span>' : f.share_token ? '<span class="badge badge-shared">🔗 Shared</span>' : '<span class="badge badge-private">🔒 Private</span>'}
+            </td>
             <td>
               <div class="actions">
                 <button class="btn btn-outline btn-sm" title="Download" onclick="downloadFile('${f.id}')">⬇️</button>
                 ${f.summary ? `<button class="btn btn-outline btn-sm" title="Summary" onclick="showSummary('${f.id}')">📄</button>` : ''}
+                <button class="btn btn-outline btn-sm" title="${f.is_public ? 'Make Private' : 'Make Public'}" onclick="toggleVisibility('${f.id}')">${f.is_public ? '🔒' : '🌐'}</button>
                 <button class="btn btn-outline btn-sm" title="Share" onclick="openShareModal('${f.id}')">🔗</button>
                 <button class="btn btn-danger btn-sm" title="Delete" onclick="deleteFile('${f.id}')">🗑️</button>
               </div>
@@ -418,6 +442,7 @@ async function uploadFiles(fileList, force = false) {
 
   const form = new FormData();
   Array.from(fileList).forEach(f => form.append('files', f));
+  form.append('is_public', uploadPublic ? 'true' : 'false');
   try {
     const res  = await fetch(force ? '/api/files/upload?force=true' : '/api/files/upload', {
       method:'POST', headers:{ 'Authorization':`Bearer ${token}` }, body:form
@@ -498,6 +523,71 @@ async function batchCompress() {
     showCompressResult(orig, comp, `${ids.length} files`);
     loadFiles();
   } catch { showToast('Compression failed — network error'); }
+}
+
+// ── Upload Visibility ─────────────────────────────────────────────────────
+function setUploadVisibility(pub) {
+  uploadPublic = pub;
+  document.getElementById('vis-private').classList.toggle('active', !pub);
+  document.getElementById('vis-public').classList.toggle('active', pub);
+}
+
+// ── Visibility Toggle ─────────────────────────────────────────────────────
+async function toggleVisibility(id) {
+  const res  = await fetch(`/api/files/${id}/visibility`, { method: 'PATCH', headers: authH() });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Failed to update visibility'); return; }
+  showToast(data.is_public ? '🌐 File is now public to all users' : '🔒 File is now private');
+  loadFiles();
+}
+
+// ── Shared Drive ──────────────────────────────────────────────────────────
+async function loadSharedFiles() {
+  try {
+    const res  = await fetch('/api/files/public', { headers: { 'Authorization': `Bearer ${token}` }});
+    const data = await res.json();
+    renderSharedFiles(data);
+  } catch {}
+}
+
+function renderSharedFiles(list) {
+  const container = document.getElementById('shared-container');
+  if (!list.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🌐</div><p>No files have been shared yet. Upload a file and set it to Public.</p></div>`;
+    return;
+  }
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr><th></th><th>Name</th><th>Tags</th><th>Size</th><th>Downloads</th><th>Shared by</th><th>Uploaded</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        ${list.map(f => `
+          <tr>
+            <td class="file-icon">${fileIcon(f.mime_type)}</td>
+            <td><div class="file-name">${escHtml(f.original_name)}</div></td>
+            <td>${renderTags(f.tags)}</td>
+            <td>${formatSize(f.size)}</td>
+            <td><span class="download-count">${f.download_count || 0}</span></td>
+            <td><span class="owner-pill">${escHtml(f.owner_name)}</span></td>
+            <td>${formatDate(f.created_at)}</td>
+            <td><button class="btn btn-primary btn-sm" style="width:auto;" onclick="downloadPublicFile('${f.id}')">⬇️ Download</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function downloadPublicFile(id) {
+  fetch(`/api/files/public/${id}/download`, { headers: { 'Authorization': `Bearer ${token}` }})
+    .then(r => {
+      const m = (r.headers.get('Content-Disposition') || '').match(/filename="?([^"]+)"?/);
+      return r.blob().then(b => ({ b, name: m ? m[1] : 'download' }));
+    })
+    .then(({ b, name }) => {
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(b), download: name });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      showToast('Downloaded!');
+    });
 }
 
 // ── Analytics ─────────────────────────────────────────────────────────────
